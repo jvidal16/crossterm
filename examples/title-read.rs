@@ -23,7 +23,7 @@ fn main() -> io::Result<()> {
     std::thread::sleep(std::time::Duration::from_millis(100));
 
     // Read it back
-    match terminal::title() {
+    match terminal::title(std::time::Duration::from_millis(200)) {
         Ok(title) if title == TEST_TITLE => {
             execute!(
                 stdout,

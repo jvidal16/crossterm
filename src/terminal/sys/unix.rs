@@ -269,8 +269,12 @@ fn query_keyboard_enhancement_flags_raw() -> io::Result<Option<KeyboardEnhanceme
 /// Queries the terminal for its current window title.
 ///
 /// This function sends a CSI 21t escape sequence to the terminal and waits for
-/// a response containing the title. The function will time out after 2 seconds
+/// a response containing the title. The function will time out after `timeout`
 /// if the terminal does not respond.
+///
+/// A timeout of **200 ms** is recommended for most use cases: it covers local
+/// terminals and typical SSH latency while keeping the failure path fast for
+/// terminals that do not support title reporting.
 ///
 /// # Compatibility
 ///
@@ -294,30 +298,29 @@ fn query_keyboard_enhancement_flags_raw() -> io::Result<Option<KeyboardEnhanceme
 /// On unix systems, this function will block and possibly time out while
 /// [`crossterm::event::read`](crate::event::read) or [`crossterm::event::poll`](crate::event::poll) are being called.
 #[cfg(feature = "events")]
-pub fn title() -> io::Result<String> {
+pub fn title(timeout: std::time::Duration) -> io::Result<String> {
     if is_raw_mode_enabled() {
-        read_title_raw()
+        read_title_raw(timeout)
     } else {
-        read_title()
+        read_title(timeout)
     }
 }
 
 #[cfg(feature = "events")]
-fn read_title() -> io::Result<String> {
+fn read_title(timeout: std::time::Duration) -> io::Result<String> {
     enable_raw_mode()?;
-    let result = read_title_raw();
+    let result = read_title_raw(timeout);
     disable_raw_mode()?;
     result
 }
 
 #[cfg(feature = "events")]
-fn read_title_raw() -> io::Result<String> {
+fn read_title_raw(timeout: std::time::Duration) -> io::Result<String> {
     use crate::event::{
         filter::WindowTitleFilter,
         internal::{self, InternalEvent},
     };
     use std::io::Write;
-    use std::time::Duration;
 
     // Send CSI 21 t to query the terminal title.
     // The terminal responds with OSC l <title> ST.
@@ -332,7 +335,7 @@ fn read_title_raw() -> io::Result<String> {
     }
 
     loop {
-        match internal::poll(Some(Duration::from_millis(2000)), &WindowTitleFilter) {
+        match internal::poll(Some(timeout), &WindowTitleFilter) {
             Ok(true) => {
                 if let Ok(InternalEvent::WindowTitle(title)) =
                     internal::read(&WindowTitleFilter)

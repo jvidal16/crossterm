@@ -89,7 +89,7 @@ pub fn supports_keyboard_enhancement() -> std::io::Result<bool> {
 /// not forwarding the terminal's response. To query the title from WSL, compile
 /// and run natively on Windows.
 #[cfg(feature = "events")]
-pub fn title() -> io::Result<String> {
+pub fn title(_timeout: std::time::Duration) -> io::Result<String> {
     let mut raw = [0_u16; 1024];
     let length = unsafe { GetConsoleTitleW(raw.as_mut_ptr(), raw.len() as u32) } as usize;
     if length == 0 {

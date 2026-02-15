@@ -4,6 +4,10 @@
 
 - Add `terminal::title()` function to query the current terminal window title (requires `events` feature). Uses CSI 21t on Unix and `GetConsoleTitleW` on Windows. Note: not all terminal emulators support title reporting on Unix (see docs for compatibility table).
 
+## Breaking ⚠️
+
+- `terminal::title()` now takes a `Duration` timeout parameter (e.g., `terminal::title(Duration::from_millis(200))`). This replaces the previous hardcoded 2-second timeout on Unix. Windows ignores the parameter but accepts it for API consistency.
+
 # Version 0.29
 
 ## Added ⭐
