@@ -1,5 +1,9 @@
 # Unreleased
 
+## Added ⭐
+
+- Add `terminal::title()` function to query the current terminal window title (requires `events` feature). Uses CSI 21t on Unix and `GetConsoleTitleW` on Windows. Note: not all terminal emulators support title reporting on Unix (see docs for compatibility table).
+
 # Version 0.29
 
 ## Added ⭐

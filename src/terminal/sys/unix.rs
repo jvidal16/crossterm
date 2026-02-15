@@ -266,6 +266,91 @@ fn query_keyboard_enhancement_flags_raw() -> io::Result<Option<KeyboardEnhanceme
     }
 }
 
+/// Queries the terminal for its current window title.
+///
+/// This function sends a CSI 21t escape sequence to the terminal and waits for
+/// a response containing the title. The function will time out after 2 seconds
+/// if the terminal does not respond.
+///
+/// # Compatibility
+///
+/// Not all terminals support title reporting. Some may ignore the query or block
+/// it for security reasons. Known behavior:
+///
+/// | Terminal | Support |
+/// |---|---|
+/// | xterm (with `allowWindowOps`) | Yes |
+/// | Windows Terminal (native) | Yes (via [`sys::windows::title`]) |
+/// | kitty | Yes |
+/// | GNOME Terminal / VTE-based | No |
+/// | WSL (via ConPTY) | No (response lost in translation layer) |
+/// | Konsole | Limited |
+///
+/// When the terminal does not respond, this function returns an
+/// [`io::Error`] with kind [`io::ErrorKind::Other`] after the timeout.
+///
+/// # Notes
+///
+/// On unix systems, this function will block and possibly time out while
+/// [`crossterm::event::read`](crate::event::read) or [`crossterm::event::poll`](crate::event::poll) are being called.
+#[cfg(feature = "events")]
+pub fn title() -> io::Result<String> {
+    if is_raw_mode_enabled() {
+        read_title_raw()
+    } else {
+        read_title()
+    }
+}
+
+#[cfg(feature = "events")]
+fn read_title() -> io::Result<String> {
+    enable_raw_mode()?;
+    let result = read_title_raw();
+    disable_raw_mode()?;
+    result
+}
+
+#[cfg(feature = "events")]
+fn read_title_raw() -> io::Result<String> {
+    use crate::event::{
+        filter::WindowTitleFilter,
+        internal::{self, InternalEvent},
+    };
+    use std::io::Write;
+    use std::time::Duration;
+
+    // Send CSI 21 t to query the terminal title.
+    // The terminal responds with OSC l <title> ST.
+    let result = File::open("/dev/tty").and_then(|mut file| {
+        file.write_all(b"\x1B[21t")?;
+        file.flush()
+    });
+    if result.is_err() {
+        let mut stdout = io::stdout();
+        stdout.write_all(b"\x1B[21t")?;
+        stdout.flush()?;
+    }
+
+    loop {
+        match internal::poll(Some(Duration::from_millis(2000)), &WindowTitleFilter) {
+            Ok(true) => {
+                if let Ok(InternalEvent::WindowTitle(title)) =
+                    internal::read(&WindowTitleFilter)
+                {
+                    return Ok(title);
+                }
+            }
+            Ok(false) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "The terminal title could not be read within a normal duration",
+                ));
+            }
+            Err(_) => {}
+        }
+    }
+}
+
 /// execute tput with the given argument and parse
 /// the output as a u16.
 ///

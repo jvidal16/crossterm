@@ -6,7 +6,10 @@ use std::io::{self};
 use crossterm_winapi::{Console, ConsoleMode, Coord, Handle, ScreenBuffer, Size};
 use winapi::{
     shared::minwindef::DWORD,
-    um::wincon::{SetConsoleTitleW, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT},
+    um::wincon::{
+        GetConsoleTitleW, SetConsoleTitleW, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT,
+        ENABLE_PROCESSED_INPUT,
+    },
 };
 
 use crate::{
@@ -74,6 +77,32 @@ pub(crate) fn window_size() -> io::Result<WindowSize> {
 #[cfg(feature = "events")]
 pub fn supports_keyboard_enhancement() -> std::io::Result<bool> {
     Ok(false)
+}
+
+/// Retrieves the current terminal window title.
+///
+/// On Windows, this uses the `GetConsoleTitleW` Win32 API, which works reliably
+/// across all Windows terminal emulators (Windows Terminal, Console Host, etc.).
+///
+/// Note: when running Linux code under WSL, the Windows API is not available and
+/// the Unix implementation is used instead, which may not work due to ConPTY
+/// not forwarding the terminal's response. To query the title from WSL, compile
+/// and run natively on Windows.
+#[cfg(feature = "events")]
+pub fn title() -> io::Result<String> {
+    let mut raw = [0_u16; 1024];
+    let length = unsafe { GetConsoleTitleW(raw.as_mut_ptr(), raw.len() as u32) } as usize;
+    if length == 0 {
+        // GetConsoleTitleW returns 0 on error, but also for an empty title.
+        // Check last error to distinguish.
+        let err = io::Error::last_os_error();
+        if err.raw_os_error() == Some(0) {
+            return Ok(String::new());
+        }
+        return Err(err);
+    }
+    String::from_utf16(&raw[..length])
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 pub(crate) fn clear(clear_type: ClearType) -> std::io::Result<()> {

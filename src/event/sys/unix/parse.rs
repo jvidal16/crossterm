@@ -74,6 +74,7 @@ pub(crate) fn parse_event(
                         }
                     }
                     b'[' => parse_csi(buffer),
+                    b']' => parse_osc(buffer),
                     b'\x1B' => Ok(Some(InternalEvent::Event(Event::Key(KeyCode::Esc.into())))),
                     _ => parse_event(&buffer[1..], input_available).map(|event_option| {
                         event_option.map(|event| {
@@ -211,6 +212,42 @@ pub(crate) fn parse_csi(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
     };
 
     Ok(input_event.map(InternalEvent::Event))
+}
+
+pub(crate) fn parse_osc(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
+    assert!(buffer.starts_with(b"\x1B]")); // ESC ]
+
+    // Find the String Terminator: either ESC \ (0x1B 0x5C) or BEL (0x07)
+    // Search from index 2 onward to skip the opening ESC ].
+    let st_pos = buffer[2..]
+        .windows(2)
+        .position(|w| w == b"\x1B\\")
+        .map(|p| p + 2);
+    let bel_pos = buffer[2..].iter().position(|&b| b == b'\x07').map(|p| p + 2);
+
+    let content_end = match (st_pos, bel_pos) {
+        (Some(st), Some(bel)) => st.min(bel),
+        (Some(st), None) => st,
+        (None, Some(bel)) => bel,
+        (None, None) => return Ok(None), // incomplete, need more bytes
+    };
+
+    // content is between ESC ] and the terminator
+    let content = &buffer[2..content_end];
+
+    if content.is_empty() {
+        return Err(could_not_parse_event_error());
+    }
+
+    // OSC l <title> ST — window title report
+    if content[0] == b'l' {
+        let title = std::str::from_utf8(&content[1..])
+            .map_err(|_| could_not_parse_event_error())?
+            .to_string();
+        return Ok(Some(InternalEvent::WindowTitle(title)));
+    }
+
+    Err(could_not_parse_event_error())
 }
 
 pub(crate) fn next_parsed<T>(iter: &mut dyn Iterator<Item = &str>) -> io::Result<T>
@@ -1482,6 +1519,35 @@ mod tests {
                 KeyEventKind::Release,
             )))),
         );
+    }
+
+    #[test]
+    fn test_parse_osc_window_title_with_st() {
+        assert_eq!(
+            parse_osc(b"\x1B]lMy Title\x1B\\").unwrap(),
+            Some(InternalEvent::WindowTitle("My Title".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_osc_window_title_with_bel() {
+        assert_eq!(
+            parse_osc(b"\x1B]lMy Title\x07").unwrap(),
+            Some(InternalEvent::WindowTitle("My Title".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_osc_window_title_empty() {
+        assert_eq!(
+            parse_osc(b"\x1B]l\x1B\\").unwrap(),
+            Some(InternalEvent::WindowTitle("".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_osc_window_title_incomplete() {
+        assert_eq!(parse_osc(b"\x1B]lMy Title").unwrap(), None);
     }
 
     #[test]

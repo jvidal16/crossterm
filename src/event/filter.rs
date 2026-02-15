@@ -46,6 +46,17 @@ impl Filter for PrimaryDeviceAttributesFilter {
     }
 }
 
+#[cfg(unix)]
+#[derive(Debug, Clone)]
+pub(crate) struct WindowTitleFilter;
+
+#[cfg(unix)]
+impl Filter for WindowTitleFilter {
+    fn eval(&self, event: &InternalEvent) -> bool {
+        matches!(*event, InternalEvent::WindowTitle(_))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct EventFilter;
 
@@ -66,7 +77,7 @@ impl Filter for EventFilter {
 mod tests {
     use super::{
         super::Event, CursorPositionFilter, EventFilter, Filter, InternalEvent,
-        KeyboardEnhancementFlagsFilter, PrimaryDeviceAttributesFilter,
+        KeyboardEnhancementFlagsFilter, PrimaryDeviceAttributesFilter, WindowTitleFilter,
     };
 
     #[derive(Debug, Clone)]
@@ -99,6 +110,12 @@ mod tests {
     fn test_primary_device_attributes_filter_filters_primary_device_attributes() {
         assert!(!PrimaryDeviceAttributesFilter.eval(&InternalEvent::Event(Event::Resize(10, 10))));
         assert!(PrimaryDeviceAttributesFilter.eval(&InternalEvent::PrimaryDeviceAttributes));
+    }
+
+    #[test]
+    fn test_window_title_filter_filters_window_title() {
+        assert!(!WindowTitleFilter.eval(&InternalEvent::Event(Event::Resize(10, 10))));
+        assert!(WindowTitleFilter.eval(&InternalEvent::WindowTitle("test".to_string())));
     }
 
     #[test]

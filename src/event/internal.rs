@@ -78,4 +78,7 @@ pub(crate) enum InternalEvent {
     /// Attributes and architectural class of the terminal.
     #[cfg(unix)]
     PrimaryDeviceAttributes,
+    /// The terminal window title.
+    #[cfg(unix)]
+    WindowTitle(String),
 }

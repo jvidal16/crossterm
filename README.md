@@ -51,7 +51,7 @@ see [Tested Terminals](#tested-terminals) for more info).
     - Exit current process
     - Alternate screen
     - Raw screen   
-    - Set terminal title
+    - Set/get the terminal title (getting the title requires `events` feature; not all terminals support title reporting, see docs)
     - Enable/disable line wrapping
 - Event 
     - Input Events 
